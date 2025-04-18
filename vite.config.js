@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5174, // Use port 5174 for consistency
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:5001', // Use 127.0.0.1 instead of localhost
+        target: 'http://127.0.0.1:5002', // Use 127.0.0.1 instead of localhost
         changeOrigin: true,
         secure: false,
         // Don't rewrite paths - keep the /api prefix

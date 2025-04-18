@@ -122,7 +122,7 @@ const ProductForm = () => {
   const fetchCategoriesFromAPI = async () => {
     try {
       console.log('Fetching categories directly from API...');
-      const response = await axios.get('http://localhost:5001/api/admin/categories');
+      const response = await axios.get('http://localhost:5002/api/admin/categories');
       console.log('Categories API response:', response.data);
 
       if (Array.isArray(response.data)) {

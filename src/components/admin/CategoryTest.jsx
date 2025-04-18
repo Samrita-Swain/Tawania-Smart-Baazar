@@ -11,15 +11,15 @@ const CategoryTest = () => {
       try {
         setLoading(true);
         console.log('CategoryTest: Fetching categories directly from API...');
-        
+
         // Try multiple endpoints
         let apiCategories = [];
-        
+
         try {
           console.log('Trying /api/admin/categories endpoint...');
-          const response = await axios.get('http://localhost:5001/api/admin/categories');
+          const response = await axios.get('http://localhost:5002/api/admin/categories');
           console.log('Response:', response);
-          
+
           if (Array.isArray(response.data) && response.data.length > 0) {
             console.log(`Got ${response.data.length} categories from /api/admin/categories`);
             apiCategories = response.data;
@@ -27,13 +27,13 @@ const CategoryTest = () => {
         } catch (error) {
           console.error('Error fetching from /api/admin/categories:', error.message);
         }
-        
+
         if (apiCategories.length === 0) {
           try {
             console.log('Trying /api/categories/direct endpoint...');
-            const response = await axios.get('http://localhost:5001/api/categories/direct');
+            const response = await axios.get('http://localhost:5002/api/categories/direct');
             console.log('Response:', response);
-            
+
             if (Array.isArray(response.data) && response.data.length > 0) {
               console.log(`Got ${response.data.length} categories from /api/categories/direct`);
               apiCategories = response.data;
@@ -42,13 +42,13 @@ const CategoryTest = () => {
             console.error('Error fetching from /api/categories/direct:', error.message);
           }
         }
-        
+
         if (apiCategories.length === 0) {
           try {
             console.log('Trying /api/debug/tables endpoint...');
-            const response = await axios.get('http://localhost:5001/api/debug/tables');
+            const response = await axios.get('http://localhost:5002/api/debug/tables');
             console.log('Response:', response);
-            
+
             if (response.data && Array.isArray(response.data.categories) && response.data.categories.length > 0) {
               console.log(`Got ${response.data.categories.length} categories from /api/debug/tables`);
               apiCategories = response.data.categories;
@@ -57,7 +57,7 @@ const CategoryTest = () => {
             console.error('Error fetching from /api/debug/tables:', error.message);
           }
         }
-        
+
         setCategories(apiCategories);
       } catch (err) {
         console.error('Error in CategoryTest:', err);
@@ -77,7 +77,7 @@ const CategoryTest = () => {
     <div className="p-4">
       <h2 className="text-xl font-bold mb-4">Category Test Component</h2>
       <p className="mb-2">Found {categories.length} categories directly from API</p>
-      
+
       {categories.length > 0 ? (
         <div className="border rounded-lg overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
@@ -102,7 +102,7 @@ const CategoryTest = () => {
       ) : (
         <p className="text-red-500">No categories found</p>
       )}
-      
+
       <div className="mt-4">
         <h3 className="text-lg font-semibold mb-2">Raw Category Data:</h3>
         <pre className="bg-gray-100 p-4 rounded-lg overflow-auto max-h-96">

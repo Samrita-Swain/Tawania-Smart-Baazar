@@ -4,7 +4,7 @@ import { debounceRequest } from '../utils/requestDebouncer';
 
 // Create a custom axios instance with default config
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5001/api', // Point directly to the simple-server.cjs
+  baseURL: 'http://localhost:5002/api', // Point directly to the simple-server.cjs
   timeout: 15000, // 15 seconds timeout
   headers: {
     'Content-Type': 'application/json'

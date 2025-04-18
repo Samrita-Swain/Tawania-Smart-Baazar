@@ -90,7 +90,56 @@ app.get('/api/admin/categories', async (req, res) => {
   }
 });
 
-// Products endpoint for category counts
+// Regular categories endpoint (with success wrapper)
+app.get('/api/categories', async (req, res) => {
+  try {
+    console.log('Fetching categories from database (regular endpoint)...');
+    const result = await pool.query('SELECT * FROM categories ORDER BY name');
+    console.log(`Found ${result.rows.length} categories in database (regular endpoint)`);
+
+    // Return with success wrapper for compatibility with some clients
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching categories (regular endpoint):', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch categories',
+      error: error.message
+    });
+  }
+});
+
+// Categories with product counts
+app.get('/api/categories/with-counts', async (req, res) => {
+  try {
+    console.log('Fetching categories with product counts...');
+    const result = await pool.query(`
+      SELECT c.*, COUNT(p.id) as product_count
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.category_id
+      GROUP BY c.id
+      ORDER BY c.name
+    `);
+    console.log(`Found ${result.rows.length} categories with counts`);
+
+    if (result.rows.length > 0) {
+      console.log('First category with count:', JSON.stringify(result.rows[0]));
+    }
+
+    // Return direct array format
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching categories with counts:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json([]);
+  }
+});
+
+// Products endpoint for admin panel (direct format)
 app.get('/api/admin/products', async (req, res) => {
   try {
     console.log('Fetching products from database for admin panel...');
@@ -107,6 +156,82 @@ app.get('/api/admin/products', async (req, res) => {
     console.error('Error fetching products for admin panel:', error.message);
     console.error('Error stack:', error.stack);
     res.status(500).json([]);
+  }
+});
+
+// Regular products endpoint (with success wrapper)
+app.get('/api/products', async (req, res) => {
+  try {
+    console.log('Fetching products from database (regular endpoint)...');
+    const result = await pool.query('SELECT p.*, c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id = c.id ORDER BY p.name');
+    console.log(`Found ${result.rows.length} products in database (regular endpoint)`);
+
+    // Return with success wrapper for compatibility with some clients
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching products (regular endpoint):', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch products',
+      error: error.message
+    });
+  }
+});
+
+// Frontend products endpoint
+app.get('/api/frontend/products', async (req, res) => {
+  try {
+    console.log('Fetching products from database for frontend...');
+    const result = await pool.query('SELECT p.*, c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id = c.id ORDER BY p.name');
+    console.log(`Found ${result.rows.length} products in database for frontend`);
+
+    if (result.rows.length > 0) {
+      console.log('First product for frontend:', JSON.stringify(result.rows[0]));
+    }
+
+    // Return direct array format for compatibility with frontend
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching products for frontend:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json([]);
+  }
+});
+
+// Single product endpoint
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const productId = parseInt(req.params.id);
+    console.log(`Fetching product with ID ${productId}...`);
+    const result = await pool.query('SELECT p.*, c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = $1', [productId]);
+
+    if (result.rows.length === 0) {
+      console.log(`Product with ID ${productId} not found`);
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    console.log(`Found product with ID ${productId}:`, JSON.stringify(result.rows[0]));
+
+    // Return with success wrapper
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error(`Error fetching product:`, error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product',
+      error: error.message
+    });
   }
 });
 

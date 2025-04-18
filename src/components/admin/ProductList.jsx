@@ -26,7 +26,7 @@ const ProductList = () => {
   const fetchProductsFromAPI = async () => {
     try {
       console.log('Fetching products directly from API...');
-      const response = await axios.get('http://localhost:5001/api/admin/products');
+      const response = await axios.get('http://localhost:5002/api/admin/products');
       console.log('API response:', response.data);
 
       if (Array.isArray(response.data)) {
@@ -49,7 +49,7 @@ const ProductList = () => {
   const fetchCategoriesFromAPI = async () => {
     try {
       console.log('Fetching categories directly from API...');
-      const response = await axios.get('http://localhost:5001/api/admin/categories');
+      const response = await axios.get('http://localhost:5002/api/admin/categories');
       console.log('Categories API response:', response.data);
 
       if (Array.isArray(response.data)) {

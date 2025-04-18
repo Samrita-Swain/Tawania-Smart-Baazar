@@ -8,7 +8,7 @@ const USE_MOCK_API = false; // Always use real API
 
 // Create a standard axios instance for backward compatibility
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api', // Point directly to the simple-server.cjs
+  baseURL: 'http://localhost:5002/api', // Point directly to the simple-server.cjs
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
@@ -276,29 +276,60 @@ export const productService = USE_MOCK_API ? mockProductService : {
       console.log('[productService] Fetching products');
       // Add a timestamp to prevent caching issues
       const timestamp = new Date().getTime();
-      // Try multiple URL patterns to handle potential API path issues
-      let response;
+
+      // Try the admin-specific endpoint on port 5002 first
       try {
-        console.log('[productService] Trying products.getAll() method');
-        const result = await apiClient.products.getAll({ _: timestamp });
-        response = { data: result };
+        console.log('[productService] Trying admin products endpoint on port 5002');
+        const response = await axios.get(`http://localhost:5002/api/admin/products?_=${timestamp}`);
+        console.log(`[productService] Fetched ${response?.data?.length || 0} admin products from port 5002`);
+
+        // Update cache
+        productService._productsCache = response.data;
+        productService._productsCacheTimestamp = now;
+
+        return { data: response.data };
       } catch (error) {
-        console.log('[productService] First attempt failed, trying /products endpoint:', error.message);
+        console.log('[productService] Admin products endpoint on port 5002 failed, trying regular products endpoint:', error.message);
+
+        // Try regular products endpoint
         try {
-          response = await apiClient.get(`/products?_=${timestamp}`);
+          console.log('[productService] Trying regular products endpoint on port 5002');
+          const response = await axios.get(`http://localhost:5002/api/products?_=${timestamp}`);
+          console.log(`[productService] Fetched ${response?.data?.data?.length || 0} products from regular endpoint`);
+
+          // Update cache
+          productService._productsCache = response.data.data;
+          productService._productsCacheTimestamp = now;
+
+          return { data: response.data.data };
         } catch (error) {
-          console.log('[productService] Second attempt failed, trying direct products endpoint:', error.message);
-          // Last attempt - try without the leading slash
-          response = await apiClient.get(`products?_=${timestamp}`);
+          console.log('[productService] All port 5002 endpoints failed, falling back to original methods:', error.message);
+
+          // Fall back to original methods
+          let response;
+          try {
+            console.log('[productService] Trying products.getAll() method');
+            const result = await apiClient.products.getAll({ _: timestamp });
+            response = { data: result };
+          } catch (error) {
+            console.log('[productService] First attempt failed, trying /products endpoint:', error.message);
+            try {
+              response = await apiClient.get(`/products?_=${timestamp}`);
+            } catch (error) {
+              console.log('[productService] Second attempt failed, trying direct products endpoint:', error.message);
+              // Last attempt - try without the leading slash
+              response = await apiClient.get(`products?_=${timestamp}`);
+            }
+          }
+          console.log(`[productService] Fetched ${response?.data?.data?.length || 0} products from original methods`);
+
+          // Update cache
+          productService._productsCache = response.data;
+          productService._productsCacheTimestamp = now;
+
+          return { data: response.data };
         }
       }
-      console.log(`[productService] Fetched ${response?.data?.data?.length || 0} products`);
-
-      // Update cache
-      productService._productsCache = response.data;
-      productService._productsCacheTimestamp = now;
-
-      return { data: response.data };
     } catch (error) {
       console.error('[productService] Error fetching products:', error.message);
       throw error;
@@ -307,20 +338,34 @@ export const productService = USE_MOCK_API ? mockProductService : {
 
   getFrontendProducts: async () => {
     try {
-      // First try to get from the frontend-specific endpoint
+      // Try the frontend-specific endpoint on port 5002 first
       try {
         const timestamp = new Date().getTime();
-        const response = await apiClient.get(`/frontend/products?_=${timestamp}`);
+        console.log('[productService] Trying frontend products endpoint on port 5002');
+        const response = await axios.get(`http://localhost:5002/api/frontend/products?_=${timestamp}`);
+        console.log(`[productService] Fetched ${response?.data?.length || 0} frontend products from port 5002`);
         return { data: response.data };
       } catch (error) {
-        console.log('Frontend products endpoint error:', error.message);
-        // Fall back to regular products endpoint
-        console.log('Falling back to regular products endpoint');
-        const response = await apiClient.products.getAll();
-        return { data: response };
+        console.log('[productService] Frontend products endpoint on port 5002 failed:', error.message);
+
+        // Try the original frontend-specific endpoint
+        try {
+          const timestamp = new Date().getTime();
+          console.log('[productService] Trying original frontend products endpoint');
+          const response = await apiClient.get(`/frontend/products?_=${timestamp}`);
+          console.log('[productService] Successfully fetched products from original frontend endpoint');
+          return { data: response.data };
+        } catch (error) {
+          console.log('[productService] Original frontend products endpoint failed:', error.message);
+
+          // Fall back to regular products endpoint
+          console.log('[productService] Falling back to regular products endpoint');
+          const response = await productService.getProducts(true); // Force refresh
+          return response;
+        }
       }
     } catch (error) {
-      console.error('Error fetching frontend products:', error.message);
+      console.error('[productService] Error fetching frontend products:', error.message);
       throw error;
     }
   },
@@ -650,31 +695,61 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
         return { data: response.data };
       } catch (error) {
-        console.log('[categoryService] Admin categories endpoint on port 5002 failed, trying regular methods:', error.message);
+        console.log('[categoryService] Admin categories endpoint on port 5002 failed, trying categories with counts:', error.message);
 
-        // Fall back to original methods
-        let response;
+        // Try categories with counts endpoint
         try {
-          console.log('[categoryService] Trying categories.getAll() method');
-          const result = await apiClient.categories.getAll({ _: timestamp });
-          response = { data: result };
+          console.log('[categoryService] Trying categories with counts endpoint on port 5002');
+          const response = await axios.get(`http://localhost:5002/api/categories/with-counts?_=${timestamp}`);
+          console.log(`[categoryService] Fetched ${response?.data?.length || 0} categories with counts from port 5002`);
+
+          // Update cache
+          categoryService._categoriesCache = response.data;
+          categoryService._categoriesCacheTimestamp = now;
+
+          return { data: response.data };
         } catch (error) {
-          console.log('[categoryService] First attempt failed, trying /categories endpoint:', error.message);
+          console.log('[categoryService] Categories with counts endpoint failed, trying regular categories endpoint:', error.message);
+
+          // Try regular categories endpoint
           try {
-            response = await apiClient.get(`/categories?_=${timestamp}`);
+            console.log('[categoryService] Trying regular categories endpoint on port 5002');
+            const response = await axios.get(`http://localhost:5002/api/categories?_=${timestamp}`);
+            console.log(`[categoryService] Fetched ${response?.data?.data?.length || 0} categories from regular endpoint`);
+
+            // Update cache
+            categoryService._categoriesCache = response.data.data;
+            categoryService._categoriesCacheTimestamp = now;
+
+            return { data: response.data.data };
           } catch (error) {
-            console.log('[categoryService] Second attempt failed, trying direct categories endpoint:', error.message);
-            // Last attempt - try without the leading slash
-            response = await apiClient.get(`categories?_=${timestamp}`);
+            console.log('[categoryService] All port 5002 endpoints failed, falling back to original methods:', error.message);
+
+            // Fall back to original methods
+            let response;
+            try {
+              console.log('[categoryService] Trying categories.getAll() method');
+              const result = await apiClient.categories.getAll({ _: timestamp });
+              response = { data: result };
+            } catch (error) {
+              console.log('[categoryService] First attempt failed, trying /categories endpoint:', error.message);
+              try {
+                response = await apiClient.get(`/categories?_=${timestamp}`);
+              } catch (error) {
+                console.log('[categoryService] Second attempt failed, trying direct categories endpoint:', error.message);
+                // Last attempt - try without the leading slash
+                response = await apiClient.get(`categories?_=${timestamp}`);
+              }
+            }
+            console.log(`[categoryService] Fetched ${response?.data?.data?.length || 0} categories from original methods`);
+
+            // Update cache
+            categoryService._categoriesCache = response.data;
+            categoryService._categoriesCacheTimestamp = now;
+
+            return { data: response.data };
           }
         }
-        console.log(`[categoryService] Fetched ${response?.data?.data?.length || 0} categories`);
-
-        // Update cache
-        categoryService._categoriesCache = response.data;
-        categoryService._categoriesCacheTimestamp = now;
-
-        return { data: response.data };
       }
     } catch (error) {
       console.error('[categoryService] Error fetching categories:', error.message);
@@ -710,12 +785,12 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
         return { data: response.data };
       } catch (error) {
-        console.log('[categoryService] Frontend categories endpoint on port 5002 failed, trying port 5001:', error.message);
+        console.log('[categoryService] Frontend categories endpoint on port 5002 failed, trying again with different path:', error.message);
 
         try {
-          console.log('[categoryService] Trying frontend categories endpoint on port 5001');
-          const response = await axios.get(`http://localhost:5001/api/frontend/categories?_=${timestamp}`);
-          console.log(`[categoryService] Fetched ${response?.data?.length || 0} frontend categories from port 5001`);
+          console.log('[categoryService] Trying frontend categories endpoint with different path');
+          const response = await axios.get(`http://localhost:5002/api/categories?_=${timestamp}`);
+          console.log(`[categoryService] Fetched ${response?.data?.length || 0} frontend categories with different path`);
 
           // Update cache
           categoryService._frontendCategoriesCache = response.data;
@@ -723,7 +798,7 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
           return { data: response.data };
         } catch (error) {
-          console.log('[categoryService] Frontend categories endpoint on port 5001 failed, falling back to regular endpoint:', error.message);
+          console.log('[categoryService] Frontend categories endpoint with different path failed, falling back to regular endpoint:', error.message);
 
           // Fall back to regular categories endpoint
           const result = await categoryService.getCategories(forceRefresh);

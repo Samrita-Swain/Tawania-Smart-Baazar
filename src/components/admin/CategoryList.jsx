@@ -29,7 +29,7 @@ const CategoryList = () => {
     try {
       // Add a timestamp to prevent caching
       const timestamp = new Date().getTime();
-      const response = await axios.get(`http://localhost:5001/api/admin/categories?_=${timestamp}`);
+      const response = await axios.get(`http://localhost:5002/api/admin/categories?_=${timestamp}`);
       console.log('API response:', response.data);
 
       if (Array.isArray(response.data) && response.data.length > 0) {
@@ -76,7 +76,7 @@ const CategoryList = () => {
       try {
         // Add a timestamp to prevent caching
         const timestamp = new Date().getTime();
-        const response = await axios.get(`http://localhost:5001/api/admin/products?_=${timestamp}`);
+        const response = await axios.get(`http://localhost:5002/api/admin/products?_=${timestamp}`);
         if (Array.isArray(response.data)) {
           apiProducts = response.data;
           console.log(`Success! Fetched ${apiProducts.length} products from API`);

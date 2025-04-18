@@ -5,7 +5,7 @@ const ApiTester = () => {
   const [testResult, setTestResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [serverUrl, setServerUrl] = useState('http://localhost:5001');
+  const [serverUrl, setServerUrl] = useState('http://localhost:5002');
 
   const testApi = async () => {
     setLoading(true);
@@ -27,7 +27,7 @@ const ApiTester = () => {
   return (
     <div className="bg-white shadow-md rounded-lg p-6 mb-6">
       <h2 className="text-xl font-semibold mb-4">API Connection Tester</h2>
-      
+
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Server URL
