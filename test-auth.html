@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Authentication</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button.danger {
+            background-color: #f44336;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Authentication</h1>
+    
+    <div class="card">
+        <h2>Login</h2>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" value="admin@twania.com">
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" value="admin123">
+        </div>
+        <button id="loginBtn">Login</button>
+    </div>
+    
+    <div class="card">
+        <h2>Authentication Status</h2>
+        <button id="checkAuthBtn">Check Auth Status</button>
+        <button id="clearAuthBtn" class="danger">Clear Auth Data</button>
+    </div>
+    
+    <div class="card">
+        <h2>Manual Token</h2>
+        <div class="form-group">
+            <label for="token">JWT Token:</label>
+            <input type="text" id="token" placeholder="Enter JWT token">
+        </div>
+        <div class="form-group">
+            <label for="userData">User Data (JSON):</label>
+            <input type="text" id="userData" placeholder='{"id":1,"name":"Admin","email":"admin@example.com","role":"admin"}'>
+        </div>
+        <button id="setTokenBtn">Set Token & User Data</button>
+    </div>
+    
+    <div class="card">
+        <h2>Current Auth Data</h2>
+        <pre id="currentAuthData">No auth data</pre>
+    </div>
+    
+    <div class="card">
+        <h2>API Test</h2>
+        <button id="testApiBtn">Test API Connection</button>
+        <button id="testProductsBtn">Test Products API</button>
+        <button id="testCategoriesBtn">Test Categories API</button>
+    </div>
+    
+    <div class="card">
+        <h2>Results</h2>
+        <pre id="output">Results will appear here...</pre>
+    </div>
+    
+    <script>
+        // DOM elements
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('loginBtn');
+        const checkAuthBtn = document.getElementById('checkAuthBtn');
+        const clearAuthBtn = document.getElementById('clearAuthBtn');
+        const tokenInput = document.getElementById('token');
+        const userDataInput = document.getElementById('userData');
+        const setTokenBtn = document.getElementById('setTokenBtn');
+        const currentAuthDataEl = document.getElementById('currentAuthData');
+        const testApiBtn = document.getElementById('testApiBtn');
+        const testProductsBtn = document.getElementById('testProductsBtn');
+        const testCategoriesBtn = document.getElementById('testCategoriesBtn');
+        const outputEl = document.getElementById('output');
+        
+        // API URL
+        const API_URL = 'http://localhost:5001';
+        
+        // Helper function to log output
+        function log(message) {
+            outputEl.textContent += '\n' + message;
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }
+        
+        // Helper function to clear output
+        function clearOutput() {
+            outputEl.textContent = '';
+        }
+        
+        // Helper function to update current auth data display
+        function updateAuthDataDisplay() {
+            const token = localStorage.getItem('token');
+            const userData = localStorage.getItem('userData');
+            
+            if (token || userData) {
+                let displayText = '';
+                
+                if (token) {
+                    displayText += `Token: ${token.substring(0, 20)}...\n\n`;
+                    
+                    // Try to decode the token
+                    try {
+                        const tokenParts = token.split('.');
+                        if (tokenParts.length === 3) {
+                            const payload = JSON.parse(atob(tokenParts[1]));
+                            displayText += `Token Payload:\n${JSON.stringify(payload, null, 2)}\n\n`;
+                            
+                            // Check if token is expired
+                            const expiry = payload.exp * 1000; // Convert to milliseconds
+                            const now = Date.now();
+                            
+                            if (expiry < now) {
+                                displayText += `Token Status: EXPIRED (${new Date(expiry).toLocaleString()})\n\n`;
+                            } else {
+                                displayText += `Token Status: VALID (Expires: ${new Date(expiry).toLocaleString()})\n\n`;
+                            }
+                        }
+                    } catch (e) {
+                        displayText += `Error decoding token: ${e.message}\n\n`;
+                    }
+                }
+                
+                if (userData) {
+                    try {
+                        const parsedUserData = JSON.parse(userData);
+                        displayText += `User Data:\n${JSON.stringify(parsedUserData, null, 2)}`;
+                    } catch (e) {
+                        displayText += `Error parsing user data: ${e.message}\n${userData}`;
+                    }
+                }
+                
+                currentAuthDataEl.textContent = displayText;
+            } else {
+                currentAuthDataEl.textContent = 'No auth data';
+            }
+        }
+        
+        // Login function
+        async function login() {
+            clearOutput();
+            log('Attempting to login...');
+            
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            
+            if (!email || !password) {
+                log('Error: Email and password are required');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                log(`Response status: ${response.status}`);
+                log(`Response data: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.success) {
+                    // Handle different response structures
+                    let token, user;
+                    
+                    if (data.data) {
+                        // New server response structure
+                        token = data.data.token;
+                        user = data.data.user;
+                    } else {
+                        // Original expected structure
+                        token = data.token;
+                        user = data.user;
+                    }
+                    
+                    if (!token || !user) {
+                        log('Error: Invalid response format, missing token or user data');
+                        return;
+                    }
+                    
+                    // Save token and user data to localStorage
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('userData', JSON.stringify(user));
+                    
+                    log('Login successful!');
+                    log(`Token: ${token.substring(0, 20)}...`);
+                    log(`User: ${JSON.stringify(user)}`);
+                    
+                    // Update auth data display
+                    updateAuthDataDisplay();
+                } else {
+                    log(`Login failed: ${data.message || 'Unknown error'}`);
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                
+                // Try mock login
+                log('Trying mock login...');
+                if ((email === 'admin@twania.com' || email === 'admin@example.com' || email === 'newadmin@twania.com') && password === 'admin123') {
+                    const mockToken = 'mock-jwt-token-for-development-only';
+                    const mockUser = {
+                        id: 2,
+                        name: 'Admin User',
+                        email: email,
+                        role: 'admin',
+                        storeId: null
+                    };
+                    
+                    // Save mock token and user data to localStorage
+                    localStorage.setItem('token', mockToken);
+                    localStorage.setItem('userData', JSON.stringify(mockUser));
+                    
+                    log('Mock login successful!');
+                    log(`Token: ${mockToken}`);
+                    log(`User: ${JSON.stringify(mockUser)}`);
+                    
+                    // Update auth data display
+                    updateAuthDataDisplay();
+                } else {
+                    log('Mock login failed: Invalid credentials');
+                }
+            }
+        }
+        
+        // Check auth status function
+        function checkAuthStatus() {
+            clearOutput();
+            log('Checking authentication status...');
+            
+            const token = localStorage.getItem('token');
+            const userData = localStorage.getItem('userData');
+            
+            if (!token) {
+                log('No token found in localStorage');
+                return;
+            }
+            
+            log(`Token found: ${token.substring(0, 20)}...`);
+            
+            // Check if token is expired by trying to decode it
+            try {
+                const tokenParts = token.split('.');
+                if (tokenParts.length === 3) {
+                    const payload = JSON.parse(atob(tokenParts[1]));
+                    log(`Token payload: ${JSON.stringify(payload, null, 2)}`);
+                    
+                    const expiry = payload.exp * 1000; // Convert to milliseconds
+                    const now = Date.now();
+                    
+                    if (expiry < now) {
+                        log(`Token has expired (${new Date(expiry).toLocaleString()})`);
+                    } else {
+                        log(`Token is valid (Expires: ${new Date(expiry).toLocaleString()})`);
+                    }
+                }
+            } catch (tokenError) {
+                log(`Error checking token expiration: ${tokenError.message}`);
+            }
+            
+            if (userData) {
+                try {
+                    const parsedUserData = JSON.parse(userData);
+                    log(`User data: ${JSON.stringify(parsedUserData, null, 2)}`);
+                } catch (e) {
+                    log(`Error parsing user data: ${e.message}`);
+                }
+            } else {
+                log('No user data found in localStorage');
+            }
+            
+            // Update auth data display
+            updateAuthDataDisplay();
+        }
+        
+        // Clear auth data function
+        function clearAuthData() {
+            clearOutput();
+            log('Clearing authentication data...');
+            
+            localStorage.removeItem('token');
+            localStorage.removeItem('userData');
+            
+            log('Authentication data cleared');
+            
+            // Update auth data display
+            updateAuthDataDisplay();
+        }
+        
+        // Set token and user data function
+        function setTokenAndUserData() {
+            clearOutput();
+            log('Setting token and user data...');
+            
+            const token = tokenInput.value;
+            const userData = userDataInput.value;
+            
+            if (!token) {
+                log('Error: Token is required');
+                return;
+            }
+            
+            // Save token to localStorage
+            localStorage.setItem('token', token);
+            log(`Token set: ${token.substring(0, 20)}...`);
+            
+            if (userData) {
+                try {
+                    // Validate JSON
+                    const parsedUserData = JSON.parse(userData);
+                    
+                    // Save user data to localStorage
+                    localStorage.setItem('userData', userData);
+                    log(`User data set: ${JSON.stringify(parsedUserData, null, 2)}`);
+                } catch (e) {
+                    log(`Error parsing user data: ${e.message}`);
+                }
+            }
+            
+            // Update auth data display
+            updateAuthDataDisplay();
+        }
+        
+        // Test API connection function
+        async function testApiConnection() {
+            clearOutput();
+            log('Testing API connection...');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/test`);
+                const data = await response.json();
+                
+                log(`Response status: ${response.status}`);
+                log(`Response data: ${JSON.stringify(data, null, 2)}`);
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+        
+        // Test products API function
+        async function testProductsApi() {
+            clearOutput();
+            log('Testing products API...');
+            
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                log('Error: No token found in localStorage');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/products`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                log(`Response status: ${response.status}`);
+                log(`Success: ${data.success}`);
+                log(`Products count: ${data.data ? data.data.length : 0}`);
+                
+                if (data.data && data.data.length > 0) {
+                    log(`First product: ${JSON.stringify(data.data[0], null, 2)}`);
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+        
+        // Test categories API function
+        async function testCategoriesApi() {
+            clearOutput();
+            log('Testing categories API...');
+            
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                log('Error: No token found in localStorage');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/categories`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                log(`Response status: ${response.status}`);
+                log(`Success: ${data.success}`);
+                log(`Categories count: ${data.data ? data.data.length : 0}`);
+                
+                if (data.data && data.data.length > 0) {
+                    log(`First category: ${JSON.stringify(data.data[0], null, 2)}`);
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+        
+        // Event listeners
+        loginBtn.addEventListener('click', login);
+        checkAuthBtn.addEventListener('click', checkAuthStatus);
+        clearAuthBtn.addEventListener('click', clearAuthData);
+        setTokenBtn.addEventListener('click', setTokenAndUserData);
+        testApiBtn.addEventListener('click', testApiConnection);
+        testProductsBtn.addEventListener('click', testProductsApi);
+        testCategoriesBtn.addEventListener('click', testCategoriesApi);
+        
+        // Initialize
+        updateAuthDataDisplay();
+        log('Test page loaded. Use the buttons above to test authentication.');
+    </script>
+</body>
+</html>

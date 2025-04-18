@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Product Deletion</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button.delete {
+            background-color: #f44336;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .product-list {
+            margin-top: 20px;
+        }
+        .product-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Product Deletion</h1>
+    
+    <div>
+        <button id="fetchProducts">Fetch Products</button>
+    </div>
+    
+    <div id="output">
+        <pre>Results will appear here...</pre>
+    </div>
+    
+    <div class="product-list" id="productList"></div>
+    
+    <script>
+        // Configuration
+        const API_URL = 'http://localhost:5001';
+        const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzQ0ODAxMzM1LCJleHAiOjE3NDU0MDYxMzV9.8chnKvKDD8XHmL_S7qaziWOU0Ts-rPiJV6CBFCenUzYo';
+        
+        // DOM elements
+        const outputElement = document.querySelector('#output pre');
+        const productListElement = document.getElementById('productList');
+        
+        // Helper function to log output
+        function log(message) {
+            outputElement.textContent += '\n' + message;
+            outputElement.scrollTop = outputElement.scrollHeight;
+        }
+        
+        // Helper function to clear output
+        function clearOutput() {
+            outputElement.textContent = '';
+        }
+        
+        // Helper function to make API requests
+        async function apiRequest(endpoint, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${AUTH_TOKEN}`
+                    }
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(`${API_URL}${endpoint}`, options);
+                const data = await response.json();
+                
+                return { success: true, data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+        
+        // Function to fetch all products
+        async function fetchProducts() {
+            clearOutput();
+            log('Fetching products...');
+            
+            const result = await apiRequest('/api/products');
+            
+            if (result.success) {
+                const products = result.data.data;
+                log(`Found ${products.length} products`);
+                
+                // Display products
+                displayProducts(products);
+            } else {
+                log(`Error: ${result.error}`);
+            }
+        }
+        
+        // Function to display products
+        function displayProducts(products) {
+            productListElement.innerHTML = '';
+            
+            products.forEach(product => {
+                const productElement = document.createElement('div');
+                productElement.className = 'product-item';
+                productElement.innerHTML = `
+                    <h3>${product.name}</h3>
+                    <p><strong>ID:</strong> ${product.id}</p>
+                    <p><strong>Price:</strong> $${product.price}</p>
+                    <p><strong>Category:</strong> ${product.category_name || 'None'}</p>
+                    <button class="delete" data-id="${product.id}">Delete Product</button>
+                `;
+                
+                productListElement.appendChild(productElement);
+            });
+            
+            // Add event listeners to delete buttons
+            document.querySelectorAll('.delete').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const productId = e.target.dataset.id;
+                    await deleteProduct(productId);
+                });
+            });
+        }
+        
+        // Function to delete a product
+        async function deleteProduct(productId) {
+            log(`Deleting product with ID: ${productId}...`);
+            
+            const result = await apiRequest(`/api/products/${productId}`, 'DELETE');
+            
+            if (result.success) {
+                log(`Product deleted successfully: ${JSON.stringify(result.data)}`);
+                
+                // Refresh the product list
+                await fetchProducts();
+            } else {
+                log(`Error deleting product: ${result.error}`);
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('fetchProducts').addEventListener('click', fetchProducts);
+        
+        // Initialize
+        log('Test page loaded. Click "Fetch Products" to begin.');
+    </script>
+</body>
+</html>
