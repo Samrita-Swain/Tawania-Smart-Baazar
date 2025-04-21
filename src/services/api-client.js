@@ -2,9 +2,12 @@
 import axios from 'axios';
 import { debounceRequest } from '../utils/requestDebouncer';
 
+// Get API URL from environment variables or use a default
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
 // Create a custom axios instance with default config
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5002/api', // Point directly to the simple-server.cjs
+  baseURL: API_URL, // Use environment variable
   timeout: 15000, // 15 seconds timeout
   headers: {
     'Content-Type': 'application/json'

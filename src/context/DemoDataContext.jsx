@@ -75,6 +75,8 @@ export const DemoDataProvider = ({ children }) => {
       if (categoryService._categoriesCacheTimestamp) categoryService._categoriesCacheTimestamp = null;
       if (categoryService._frontendCategoriesCache) categoryService._frontendCategoriesCache = null;
       if (categoryService._frontendCategoriesCacheTimestamp) categoryService._frontendCategoriesCacheTimestamp = null;
+      if (categoryService._categoriesWithCountsCache) categoryService._categoriesWithCountsCache = null;
+      if (categoryService._categoriesWithCountsCacheTimestamp) categoryService._categoriesWithCountsCacheTimestamp = null;
       console.log('Cleared category service caches');
     } catch (error) {
       console.warn('Error clearing category service caches:', error.message);
@@ -102,6 +104,7 @@ export const DemoDataProvider = ({ children }) => {
         console.log('Sync timeout reached, resetting sync state');
         setIsSyncing(false);
         setSyncError('Sync timed out');
+        fetchInProgress.current = false;
       }
     }, 30000);
 
@@ -116,6 +119,9 @@ export const DemoDataProvider = ({ children }) => {
 
     setIsSyncing(true);
     setSyncError(null);
+
+    // Add a timestamp to track when this sync started
+    const syncStartTime = new Date().getTime();
 
     if (forceRefresh) {
       console.log('Forced refresh requested - clearing cached data');
@@ -269,16 +275,65 @@ export const DemoDataProvider = ({ children }) => {
       let categoryResult = false;
       if (!fetchedEntities.has('categories')) {
         console.log('Starting categories fetch...');
-        // Try to fetch frontend categories first
+        // Try to fetch categories with counts first
         try {
-          console.log('Fetching frontend categories...');
-          const frontendCategoriesResponse = await categoryService.getFrontendCategories(forceRefresh);
-          if (frontendCategoriesResponse && frontendCategoriesResponse.data) {
-            console.log('Frontend categories fetched successfully:', frontendCategoriesResponse.data.length || 0, 'categories');
-            setCategories(frontendCategoriesResponse.data);
+          console.log('Fetching categories with counts...');
+          const categoriesWithCountsResponse = await categoryService.getCategoriesWithCounts(forceRefresh);
+          if (categoriesWithCountsResponse && categoriesWithCountsResponse.data) {
+            console.log('Categories with counts fetched successfully:', categoriesWithCountsResponse.data.length || 0, 'categories');
+            setCategories(categoriesWithCountsResponse.data);
             categoryResult = true;
           } else {
-            console.log('Frontend categories response invalid, falling back to regular categories');
+            console.log('Categories with counts response invalid, trying frontend categories');
+            try {
+              console.log('Fetching frontend categories...');
+              const frontendCategoriesResponse = await categoryService.getFrontendCategories(forceRefresh);
+              if (frontendCategoriesResponse && frontendCategoriesResponse.data) {
+                console.log('Frontend categories fetched successfully:', frontendCategoriesResponse.data.length || 0, 'categories');
+                setCategories(frontendCategoriesResponse.data);
+                categoryResult = true;
+              } else {
+                console.log('Frontend categories response invalid, falling back to regular categories');
+                categoryResult = await fetchWithFallback(
+                  categoryService.getCategories,
+                  setCategories,
+                  'categories',
+                  'Categories'
+                );
+              }
+            } catch (error) {
+              console.error('Error fetching frontend categories:', error.message);
+              console.log('Falling back to regular categories endpoint');
+              categoryResult = await fetchWithFallback(
+                categoryService.getCategories,
+                setCategories,
+                'categories',
+                'Categories'
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching categories with counts:', error.message);
+          console.log('Falling back to frontend categories endpoint');
+          try {
+            console.log('Fetching frontend categories...');
+            const frontendCategoriesResponse = await categoryService.getFrontendCategories(forceRefresh);
+            if (frontendCategoriesResponse && frontendCategoriesResponse.data) {
+              console.log('Frontend categories fetched successfully:', frontendCategoriesResponse.data.length || 0, 'categories');
+              setCategories(frontendCategoriesResponse.data);
+              categoryResult = true;
+            } else {
+              console.log('Frontend categories response invalid, falling back to regular categories');
+              categoryResult = await fetchWithFallback(
+                categoryService.getCategories,
+                setCategories,
+                'categories',
+                'Categories'
+              );
+            }
+          } catch (error) {
+            console.error('Error fetching frontend categories:', error.message);
+            console.log('Falling back to regular categories endpoint');
             categoryResult = await fetchWithFallback(
               categoryService.getCategories,
               setCategories,
@@ -286,15 +341,6 @@ export const DemoDataProvider = ({ children }) => {
               'Categories'
             );
           }
-        } catch (error) {
-          console.error('Error fetching frontend categories:', error.message);
-          console.log('Falling back to regular categories endpoint');
-          categoryResult = await fetchWithFallback(
-            categoryService.getCategories,
-            setCategories,
-            'categories',
-            'Categories'
-          );
         }
         fetchedEntities.add('categories');
         console.log('Categories fetch complete, result:', categoryResult);
@@ -405,7 +451,7 @@ export const DemoDataProvider = ({ children }) => {
         forceRefreshData().finally(() => {
           fetchInProgress.current = false;
         });
-      }, 1000);
+      }, 2000); // Increased delay to 2 seconds to avoid race conditions
 
       // Clean up the timer to prevent memory leaks
       return () => clearTimeout(timer);
@@ -414,6 +460,9 @@ export const DemoDataProvider = ({ children }) => {
       initialFetchDone.current = true;
     }
   }, []); // Empty dependency array ensures this only runs once
+
+  // IMPORTANT: We've disabled automatic polling to prevent excessive API calls
+  // Manual refresh can be triggered with the Sync Now button or forceRefreshData()
 
   // Disable automatic periodic sync with the database to prevent infinite loops
   // Manual refresh can be triggered with forceRefreshData() instead

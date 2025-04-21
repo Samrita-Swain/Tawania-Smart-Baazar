@@ -6,9 +6,12 @@ import axios from 'axios';
 // Flag to use mock API instead of real API
 const USE_MOCK_API = false; // Always use real API
 
+// Get API URL from environment variables or use a default
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
 // Create a standard axios instance for backward compatibility
 const api = axios.create({
-  baseURL: 'http://localhost:5002/api', // Point directly to the simple-server.cjs
+  baseURL: API_URL, // Use environment variable
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
@@ -279,9 +282,9 @@ export const productService = USE_MOCK_API ? mockProductService : {
 
       // Try the admin-specific endpoint on port 5002 first
       try {
-        console.log('[productService] Trying admin products endpoint on port 5002');
-        const response = await axios.get(`http://localhost:5002/api/admin/products?_=${timestamp}`);
-        console.log(`[productService] Fetched ${response?.data?.length || 0} admin products from port 5002`);
+        console.log('[productService] Trying admin products endpoint');
+        const response = await axios.get(`${API_URL}/admin/products?_=${timestamp}`);
+        console.log(`[productService] Fetched ${response?.data?.length || 0} admin products`);
 
         // Update cache
         productService._productsCache = response.data;
@@ -293,8 +296,8 @@ export const productService = USE_MOCK_API ? mockProductService : {
 
         // Try regular products endpoint
         try {
-          console.log('[productService] Trying regular products endpoint on port 5002');
-          const response = await axios.get(`http://localhost:5002/api/products?_=${timestamp}`);
+          console.log('[productService] Trying regular products endpoint');
+          const response = await axios.get(`${API_URL}/products?_=${timestamp}`);
           console.log(`[productService] Fetched ${response?.data?.data?.length || 0} products from regular endpoint`);
 
           // Update cache
@@ -341,9 +344,9 @@ export const productService = USE_MOCK_API ? mockProductService : {
       // Try the frontend-specific endpoint on port 5002 first
       try {
         const timestamp = new Date().getTime();
-        console.log('[productService] Trying frontend products endpoint on port 5002');
-        const response = await axios.get(`http://localhost:5002/api/frontend/products?_=${timestamp}`);
-        console.log(`[productService] Fetched ${response?.data?.length || 0} frontend products from port 5002`);
+        console.log('[productService] Trying frontend products endpoint');
+        const response = await axios.get(`${API_URL}/frontend/products?_=${timestamp}`);
+        console.log(`[productService] Fetched ${response?.data?.length || 0} frontend products`);
         return { data: response.data };
       } catch (error) {
         console.log('[productService] Frontend products endpoint on port 5002 failed:', error.message);
@@ -666,6 +669,8 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
   _categoriesCacheExpiry: 60000, // 1 minute cache expiry
   _frontendCategoriesCache: null,
   _frontendCategoriesCacheTimestamp: null,
+  _categoriesWithCountsCache: null,
+  _categoriesWithCountsCacheTimestamp: null,
 
   getCategories: async (forceRefresh = false) => {
     try {
@@ -685,9 +690,9 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
       // Try the admin-specific endpoint on port 5002 first
       try {
-        console.log('[categoryService] Trying admin categories endpoint on port 5002');
-        const response = await axios.get(`http://localhost:5002/api/admin/categories?_=${timestamp}`);
-        console.log(`[categoryService] Fetched ${response?.data?.length || 0} admin categories from port 5002`);
+        console.log('[categoryService] Trying admin categories endpoint');
+        const response = await axios.get(`${API_URL}/admin/categories?_=${timestamp}`);
+        console.log(`[categoryService] Fetched ${response?.data?.length || 0} admin categories`);
 
         // Update cache
         categoryService._categoriesCache = response.data;
@@ -699,9 +704,9 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
         // Try categories with counts endpoint
         try {
-          console.log('[categoryService] Trying categories with counts endpoint on port 5002');
-          const response = await axios.get(`http://localhost:5002/api/categories/with-counts?_=${timestamp}`);
-          console.log(`[categoryService] Fetched ${response?.data?.length || 0} categories with counts from port 5002`);
+          console.log('[categoryService] Trying categories with counts endpoint');
+          const response = await axios.get(`${API_URL}/categories/with-counts?_=${timestamp}`);
+          console.log(`[categoryService] Fetched ${response?.data?.length || 0} categories with counts`);
 
           // Update cache
           categoryService._categoriesCache = response.data;
@@ -713,8 +718,8 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
           // Try regular categories endpoint
           try {
-            console.log('[categoryService] Trying regular categories endpoint on port 5002');
-            const response = await axios.get(`http://localhost:5002/api/categories?_=${timestamp}`);
+            console.log('[categoryService] Trying regular categories endpoint');
+            const response = await axios.get(`${API_URL}/categories?_=${timestamp}`);
             console.log(`[categoryService] Fetched ${response?.data?.data?.length || 0} categories from regular endpoint`);
 
             // Update cache
@@ -757,6 +762,46 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
     }
   },
 
+  getCategoriesWithCounts: async (forceRefresh = false) => {
+    try {
+      // Check if we have a valid cache and not forcing refresh
+      const now = new Date().getTime();
+      if (!forceRefresh &&
+          categoryService._categoriesWithCountsCache &&
+          categoryService._categoriesWithCountsCacheTimestamp &&
+          (now - categoryService._categoriesWithCountsCacheTimestamp) < categoryService._categoriesCacheExpiry) {
+        console.log('[categoryService] Using cached categories with counts data');
+        return { data: categoryService._categoriesWithCountsCache };
+      }
+
+      console.log('[categoryService] Fetching categories with counts');
+      // Add a timestamp to prevent caching issues
+      const timestamp = new Date().getTime();
+
+      // Try the categories with counts endpoint
+      try {
+        console.log('[categoryService] Trying categories with counts endpoint');
+        const response = await axios.get(`${API_URL}/categories/with-counts?_=${timestamp}`);
+        console.log(`[categoryService] Fetched ${response?.data?.length || 0} categories with counts`);
+
+        // Update cache
+        categoryService._categoriesWithCountsCache = response.data;
+        categoryService._categoriesWithCountsCacheTimestamp = now;
+
+        return { data: response.data };
+      } catch (error) {
+        console.log('[categoryService] Categories with counts endpoint failed, falling back to regular categories:', error.message);
+
+        // Fall back to regular categories endpoint
+        const result = await categoryService.getCategories(forceRefresh);
+        return result;
+      }
+    } catch (error) {
+      console.error('[categoryService] Error fetching categories with counts:', error.message);
+      throw error;
+    }
+  },
+
   getFrontendCategories: async (forceRefresh = false) => {
     try {
       // Check if we have a valid cache and not forcing refresh
@@ -775,9 +820,9 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
       // Try the frontend-specific endpoint first on port 5002
       try {
-        console.log('[categoryService] Trying frontend categories endpoint on port 5002');
-        const response = await axios.get(`http://localhost:5002/api/frontend/categories?_=${timestamp}`);
-        console.log(`[categoryService] Fetched ${response?.data?.length || 0} frontend categories from port 5002`);
+        console.log('[categoryService] Trying frontend categories endpoint');
+        const response = await axios.get(`${API_URL}/frontend/categories?_=${timestamp}`);
+        console.log(`[categoryService] Fetched ${response?.data?.length || 0} frontend categories`);
 
         // Update cache
         categoryService._frontendCategoriesCache = response.data;
@@ -789,7 +834,7 @@ export const categoryService = USE_MOCK_API ? mockCategoryService : {
 
         try {
           console.log('[categoryService] Trying frontend categories endpoint with different path');
-          const response = await axios.get(`http://localhost:5002/api/categories?_=${timestamp}`);
+          const response = await axios.get(`${API_URL}/categories?_=${timestamp}`);
           console.log(`[categoryService] Fetched ${response?.data?.length || 0} frontend categories with different path`);
 
           // Update cache

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getApiUrl } from '../../utils/apiConfig';
 import axios from 'axios';
 
 const CategoryTest = () => {
@@ -17,7 +18,7 @@ const CategoryTest = () => {
 
         try {
           console.log('Trying /api/admin/categories endpoint...');
-          const response = await axios.get('http://localhost:5002/api/admin/categories');
+          const response = await axios.get(getApiUrl('admin/categories'));
           console.log('Response:', response);
 
           if (Array.isArray(response.data) && response.data.length > 0) {
@@ -31,7 +32,7 @@ const CategoryTest = () => {
         if (apiCategories.length === 0) {
           try {
             console.log('Trying /api/categories/direct endpoint...');
-            const response = await axios.get('http://localhost:5002/api/categories/direct');
+            const response = await axios.get(getApiUrl('categories/direct'));
             console.log('Response:', response);
 
             if (Array.isArray(response.data) && response.data.length > 0) {
@@ -46,7 +47,7 @@ const CategoryTest = () => {
         if (apiCategories.length === 0) {
           try {
             console.log('Trying /api/debug/tables endpoint...');
-            const response = await axios.get('http://localhost:5002/api/debug/tables');
+            const response = await axios.get(getApiUrl('debug/tables'));
             console.log('Response:', response);
 
             if (response.data && Array.isArray(response.data.categories) && response.data.categories.length > 0) {

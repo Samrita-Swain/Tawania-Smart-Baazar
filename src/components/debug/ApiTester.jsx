@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../../utils/apiConfig';
 import axios from 'axios';
 
 const ApiTester = () => {
   const [testResult, setTestResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [serverUrl, setServerUrl] = useState('http://localhost:5002');
+  const [serverUrl, setServerUrl] = useState(API_URL.replace('/api', ''));
 
   const testApi = async () => {
     setLoading(true);

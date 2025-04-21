@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useDemoData } from '../../context/DemoDataContext';
+import { getApiUrl } from '../../utils/apiConfig';
 import axios from 'axios';
 
 const CategoryList = () => {
@@ -29,7 +30,7 @@ const CategoryList = () => {
     try {
       // Add a timestamp to prevent caching
       const timestamp = new Date().getTime();
-      const response = await axios.get(`http://localhost:5002/api/admin/categories?_=${timestamp}`);
+      const response = await axios.get(`${getApiUrl('admin/categories')}?_=${timestamp}`);
       console.log('API response:', response.data);
 
       if (Array.isArray(response.data) && response.data.length > 0) {
@@ -61,6 +62,12 @@ const CategoryList = () => {
 
   // Function to fetch and process categories
   const fetchCategories = async () => {
+    // Use a flag to prevent multiple simultaneous fetches
+    if (loading || fetchInProgress.current) {
+      console.log('Already loading categories, skipping fetch');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -70,74 +77,87 @@ const CategoryList = () => {
       // Get categories from API
       const apiCategories = await fetchCategoriesFromAPI();
 
-      // Get products from API
-      console.log('Fetching products from API...');
-      let apiProducts = [];
-      try {
-        // Add a timestamp to prevent caching
-        const timestamp = new Date().getTime();
-        const response = await axios.get(`http://localhost:5002/api/admin/products?_=${timestamp}`);
-        if (Array.isArray(response.data)) {
-          apiProducts = response.data;
-          console.log(`Success! Fetched ${apiProducts.length} products from API`);
-          if (apiProducts.length > 0) {
-            console.log('First product from API:', apiProducts[0]);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching products from API:', error.message);
-      }
-
-      // Log what we got
-      logCategories('API', apiCategories);
-      logCategories('Demo Context', demoCategories);
-      console.log(`Products from API: ${apiProducts.length}, from Demo Context: ${demoProducts.length}`);
-
-      // Determine which categories to use
-      let categoriesToUse = [];
+      // Get products from API - but only if we have categories
       if (apiCategories && apiCategories.length > 0) {
-        console.log(`Using ${apiCategories.length} categories from API`);
-        categoriesToUse = apiCategories;
-      } else {
-        console.log('API fetch failed, falling back to demo data');
-        categoriesToUse = demoCategories;
-      }
+        console.log('Fetching products from API...');
+        let apiProducts = [];
+        try {
+          // Add a timestamp to prevent caching
+          const timestamp = new Date().getTime();
+          const response = await axios.get(`${getApiUrl('admin/products')}?_=${timestamp}`);
+          if (Array.isArray(response.data)) {
+            apiProducts = response.data;
+            console.log(`Success! Fetched ${apiProducts.length} products from API`);
+            if (apiProducts.length > 0) {
+              console.log('First product from API:', apiProducts[0]);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching products from API:', error.message);
+        }
 
-      // Determine which products to use
-      let productsToUse = [];
-      if (apiProducts && apiProducts.length > 0) {
-        console.log(`Using ${apiProducts.length} products from API`);
-        productsToUse = apiProducts;
-      } else {
-        console.log('API products fetch failed, falling back to demo data');
-        productsToUse = demoProducts;
-      }
+        // Log what we got
+        logCategories('API', apiCategories);
+        logCategories('Demo Context', demoCategories);
+        console.log(`Products from API: ${apiProducts.length}, from Demo Context: ${demoProducts.length}`);
 
-      console.log(`Processing ${categoriesToUse.length} categories with ${productsToUse.length} products...`);
+        // Determine which categories to use
+        let categoriesToUse = [];
+        if (apiCategories && apiCategories.length > 0) {
+          console.log(`Using ${apiCategories.length} categories from API`);
+          categoriesToUse = apiCategories;
+        } else {
+          console.log('API fetch failed, falling back to demo data');
+          categoriesToUse = demoCategories;
+        }
 
-      // Calculate product count for each category
-      const categoriesWithProductCount = categoriesToUse.map(category => {
-        // Check for products with this category
-        const matchingProducts = productsToUse.filter(product => {
-          // Compare both as strings and as numbers to handle type mismatches
-          return String(product.category_id) === String(category.id) ||
-                 Number(product.category_id) === Number(category.id);
+        // Determine which products to use
+        let productsToUse = [];
+        if (apiProducts && apiProducts.length > 0) {
+          console.log(`Using ${apiProducts.length} products from API`);
+          productsToUse = apiProducts;
+        } else {
+          console.log('API products fetch failed, falling back to demo data');
+          productsToUse = demoProducts;
+        }
+
+        console.log(`Processing ${categoriesToUse.length} categories with ${productsToUse.length} products...`);
+
+        // Calculate product count for each category
+        const categoriesWithProductCount = categoriesToUse.map(category => {
+          // Check for products with this category
+          const matchingProducts = productsToUse.filter(product => {
+            // Compare both as strings and as numbers to handle type mismatches
+            return String(product.category_id) === String(category.id) ||
+                   Number(product.category_id) === Number(category.id);
+          });
+
+          console.log(`Category ${category.name} (ID: ${category.id}) has ${matchingProducts.length} products`);
+
+          return {
+            ...category,
+            productCount: matchingProducts.length
+          };
         });
 
-        console.log(`Category ${category.name} (ID: ${category.id}) has ${matchingProducts.length} products`);
+        // Normalize categories to ensure consistent property names
+        const normalizedCategories = categoriesWithProductCount.map(normalizeCategory);
 
-        return {
+        console.log(`Setting ${normalizedCategories.length} normalized categories in state`);
+        if (normalizedCategories.length > 0) {
+          console.log('First category after normalization:', normalizedCategories[0]);
+        }
+        setCategories(normalizedCategories);
+      } else {
+        // If we don't have categories from API, use demo data
+        console.log('No categories from API, using demo data');
+        const normalizedCategories = demoCategories.map(category => ({
           ...category,
-          productCount: matchingProducts.length
-        };
-      });
+          productCount: 0
+        })).map(normalizeCategory);
 
-      // Normalize categories to ensure consistent property names
-      const normalizedCategories = categoriesWithProductCount.map(normalizeCategory);
-
-      console.log(`Setting ${normalizedCategories.length} normalized categories in state`);
-      console.log('First category after normalization:', normalizedCategories[0]);
-      setCategories(normalizedCategories);
+        setCategories(normalizedCategories);
+      }
 
       console.log('Category fetch process complete');
     } catch (err) {
@@ -148,30 +168,69 @@ const CategoryList = () => {
     }
   };
 
+  // Use refs to track fetch status
+  const initialFetchDone = useRef(false);
+  const fetchInProgress = useRef(false);
+
   // Fetch categories when the component mounts
   useEffect(() => {
+    // Skip if we've already done the initial fetch or if a fetch is in progress
+    if (initialFetchDone.current || fetchInProgress.current) {
+      console.log('Initial fetch already done or in progress, skipping');
+      return;
+    }
+
     console.log('CategoryList: Component mounted, fetching categories...');
-    fetchCategories();
+
+    // Set up a flag to track if component is mounted
+    let isMounted = true;
+
+    // Add a slight delay before initial fetch to prevent race conditions
+    const timer = setTimeout(() => {
+      fetchInProgress.current = true;
+      fetchCategories().then(() => {
+        if (isMounted) {
+          initialFetchDone.current = true;
+          fetchInProgress.current = false;
+        }
+      }).catch(() => {
+        if (isMounted) {
+          initialFetchDone.current = true;
+          fetchInProgress.current = false;
+        }
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      isMounted = false;
+    };
   }, []);
 
-  // Refresh when location changes
+  // Refresh when location changes - but only the pathname, not search params
+  // and only if we're not already fetching
   useEffect(() => {
-    console.log('CategoryList: Location changed, fetching categories...');
-    fetchCategories();
-  }, [location]);
+    if (fetchInProgress.current) {
+      console.log('Fetch already in progress, skipping location change fetch');
+      return;
+    }
 
-  // Refresh when demo data changes
-  useEffect(() => {
-    console.log('CategoryList: Demo data changed, fetching categories...');
-    fetchCategories();
-  }, [demoCategories, demoProducts]);
+    console.log('CategoryList: Location pathname changed, fetching categories...');
+    fetchInProgress.current = true;
+    fetchCategories().finally(() => {
+      fetchInProgress.current = false;
+    });
+  }, [location.pathname]);
+
+  // We don't need to refresh on demo data changes since we're using the API directly
+  // This was causing an infinite loop
 
   const handleDeleteClick = (category) => {
     setCategoryToDelete(category);
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!categoryToDelete) return;
 
     try {
@@ -179,30 +238,32 @@ const CategoryList = () => {
       setError(null);
 
       // Check if category has subcategories
-      const hasSubcategories = demoCategories.some(category => category.parentId === categoryToDelete.id);
+      const hasSubcategories = categories.some(category =>
+        category.parentId === categoryToDelete.id || category.parent_id === categoryToDelete.id
+      );
+
       if (hasSubcategories) {
         throw new Error('Cannot delete a category that has subcategories');
       }
 
-      // Check if category is used by products
-      const isUsedByProducts = demoProducts.some(product => product.category_id === categoryToDelete.id);
-      if (isUsedByProducts) {
-        throw new Error('Cannot delete a category that is used by products');
-      }
+      // Delete the category using the API
+      console.log(`Deleting category ${categoryToDelete.id} via API...`);
+      const response = await axios.delete(`${getApiUrl(`admin/categories/${categoryToDelete.id}`)}`);
+      console.log('Delete category response:', response.data);
 
-      // Call the context function to delete the category
-      const result = deleteContextCategory(categoryToDelete.id);
-
-      if (result) {
+      if (response.data && response.data.success) {
+        console.log('Category deleted successfully');
         // The state will be updated automatically via the useEffect hook
         setIsDeleteModalOpen(false);
         setCategoryToDelete(null);
+        // Refresh the categories list
+        fetchCategories();
       } else {
-        throw new Error('Failed to delete category');
+        throw new Error(response.data?.message || 'Failed to delete category');
       }
     } catch (err) {
       console.error('Error deleting category:', err);
-      setError('Failed to delete category: ' + (err.message || 'Unknown error'));
+      setError('Failed to delete category: ' + (err.response?.data?.message || err.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }

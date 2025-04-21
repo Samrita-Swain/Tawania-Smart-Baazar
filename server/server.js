@@ -11,16 +11,22 @@ const orderRoutes = require('./routes/orders');
 const warehouseRoutes = require('./routes/warehouse');
 const storeRoutes = require('./routes/stores');
 
+// Import middleware
+const rateLimiter = require('./middleware/rateLimiter');
+
 // Initialize express app
 const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apply rate limiter to all routes
+app.use(rateLimiter);
 
 // Log all requests
 app.use((req, res, next) => {

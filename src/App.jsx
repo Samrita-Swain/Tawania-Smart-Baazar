@@ -29,6 +29,7 @@ import HomePage from './pages/website/HomePage';
 import ProductsPage from './pages/website/ProductsPage';
 import ProductDetailPage from './pages/website/ProductDetailPage';
 import CartPage from './pages/website/CartPage';
+import CategoriesPage from './pages/website/CategoriesPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -184,6 +185,10 @@ const AppRoutes = () => {
       <Route
         path="/cart"
         element={<CartPage />}
+      />
+      <Route
+        path="/categories"
+        element={<CategoriesPage />}
       />
 
       {/* Catch all - redirect to appropriate dashboard or login */}

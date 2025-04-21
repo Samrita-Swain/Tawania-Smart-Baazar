@@ -6,6 +6,9 @@
   "server": {
     "type": "commonjs"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,7 +17,8 @@
     "server": "node server.cjs",
     "init-db": "node initDb.cjs",
     "create-admin": "node create-admin.cjs",
-    "start": "concurrently \"npm run server\" \"npm run dev\""
+    "start": "concurrently \"npm run server\" \"npm run dev\"",
+    "vercel-build": "vite build"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.1",

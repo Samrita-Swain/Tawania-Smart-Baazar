@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDemoData } from '../../context/DemoDataContext';
 import { clearProductsFromStorage } from '../../utils/clearProducts';
+import { getApiUrl } from '../../utils/apiConfig';
 import axios from 'axios';
 
 const ProductList = () => {
@@ -24,9 +25,21 @@ const ProductList = () => {
 
   // Function to fetch products directly from the API
   const fetchProductsFromAPI = async () => {
+    // If a fetch is already in progress, return an empty array
+    if (fetchInProgress.current) {
+      console.log('Fetch already in progress, skipping fetchProductsFromAPI');
+      return [];
+    }
+
     try {
       console.log('Fetching products directly from API...');
-      const response = await axios.get('http://localhost:5002/api/admin/products');
+      // Set fetchInProgress to true to prevent duplicate requests
+      fetchInProgress.current = true;
+
+      // Add a timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      console.log('API URL:', getApiUrl('admin/products'));
+      const response = await axios.get(`${getApiUrl('admin/products')}?_=${timestamp}`);
       console.log('API response:', response.data);
 
       if (Array.isArray(response.data)) {
@@ -41,15 +54,47 @@ const ProductList = () => {
       }
     } catch (error) {
       console.error('Error fetching products from API:', error.message);
+      // Log more details about the error
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', error.response.data);
+        console.error('Error response status:', error.response.status);
+        console.error('Error response headers:', error.response.headers);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('Error request:', error.request);
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Error message:', error.message);
+      }
       return [];
+    } finally {
+      // Set a timeout to clear the fetchInProgress flag after 1 second
+      // This prevents the app from getting stuck if there's an error
+      setTimeout(() => {
+        fetchInProgress.current = false;
+      }, 1000);
     }
   };
 
   // Function to fetch categories directly from the API
   const fetchCategoriesFromAPI = async () => {
+    // If a fetch is already in progress, return an empty array
+    if (fetchInProgress.current) {
+      console.log('Fetch already in progress, skipping fetchCategoriesFromAPI');
+      return [];
+    }
+
     try {
       console.log('Fetching categories directly from API...');
-      const response = await axios.get('http://localhost:5002/api/admin/categories');
+      // We don't set fetchInProgress here because it's already set in fetchProductsFromAPI
+      // and we want to allow both to run in parallel
+
+      // Add a timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      console.log('Categories API URL:', getApiUrl('admin/categories'));
+      const response = await axios.get(`${getApiUrl('admin/categories')}?_=${timestamp}`);
       console.log('Categories API response:', response.data);
 
       if (Array.isArray(response.data)) {
@@ -64,6 +109,20 @@ const ProductList = () => {
       }
     } catch (error) {
       console.error('Error fetching categories from API:', error.message);
+      // Log more details about the error
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', error.response.data);
+        console.error('Error response status:', error.response.status);
+        console.error('Error response headers:', error.response.headers);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('Error request:', error.request);
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Error message:', error.message);
+      }
       return [];
     }
   };
@@ -89,90 +148,95 @@ const ProductList = () => {
     }
   }, [location.search, demoCategories, apiCategories]);
 
-  // Load products
+  // We don't need this effect anymore as it's causing duplicate API calls
+  // The initial data fetch in the mount effect is sufficient
+
+  // Use a ref to track if we've already fetched data
+  const initialFetchDone = useRef(false);
+  const fetchInProgress = useRef(false);
+
+  // Fetch data on component mount only - with proper controls to prevent duplicate fetches
   useEffect(() => {
-    const loadProducts = async () => {
+    // Skip if we've already done the initial fetch or if a fetch is in progress
+    if (initialFetchDone.current || fetchInProgress.current) {
+      console.log('Initial fetch already done or in progress, skipping');
+      return;
+    }
+
+    console.log('ProductList component mounted, fetching products and categories from API');
+
+    // Use a flag to prevent multiple fetches
+    let isMounted = true;
+
+    const fetchInitialData = async () => {
+      // Set fetchInProgress to true to prevent duplicate requests
+      fetchInProgress.current = true;
+
       try {
-        setLoading(true);
-
-        // Try to fetch products directly from the API first
+        // Initial fetch of products
         const apiProducts = await fetchProductsFromAPI();
-
-        if (apiProducts && apiProducts.length > 0) {
-          console.log(`Setting ${apiProducts.length} products from API`);
+        if (isMounted && apiProducts && apiProducts.length > 0) {
+          console.log(`Setting ${apiProducts.length} products from API on mount`);
           setProducts(apiProducts);
-        } else {
-          // Fall back to demo data if API fails
-          console.log('API fetch failed, falling back to demo data');
-          setProducts(demoProducts);
-
-          // If no products are loaded, try to force refresh from the database
-          if (!demoProducts || demoProducts.length === 0) {
-            console.log('No products found in demo data, forcing refresh from database');
-            forceRefreshData();
+          setLoading(false); // Set loading to false once we have products
+          // Mark initial fetch as done
+          initialFetchDone.current = true;
+        } else if (isMounted) {
+          console.log('Initial API fetch failed, forcing refresh from database');
+          await forceRefreshData();
+          // Try fetching products again after forcing refresh
+          const refreshedProducts = await fetchProductsFromAPI();
+          if (isMounted && refreshedProducts && refreshedProducts.length > 0) {
+            console.log(`Setting ${refreshedProducts.length} products after refresh`);
+            setProducts(refreshedProducts);
           } else {
-            console.log(`Loaded ${demoProducts.length} products from demo data`);
+            // If still no products, use demo data as fallback
+            console.log('Using demo products as fallback');
+            setProducts(demoProducts);
           }
+          setLoading(false); // Set loading to false
+          // Mark initial fetch as done even if it failed
+          initialFetchDone.current = true;
         }
-      } catch (err) {
-        console.error('Error loading products:', err);
-        setError('Failed to load products');
-        setProducts([]);
+
+        // Initial fetch of categories
+        const categories = await fetchCategoriesFromAPI();
+        if (isMounted && categories && categories.length > 0) {
+          console.log(`Setting ${categories.length} categories from API on mount`);
+          setApiCategories(categories);
+        } else if (isMounted) {
+          // If no categories from API, use demo categories
+          console.log('Using demo categories as fallback');
+          setApiCategories(demoCategories);
+        }
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+        // Use demo data as fallback
+        if (isMounted) {
+          console.log('Using demo data as fallback due to error');
+          setProducts(demoProducts);
+          setApiCategories(demoCategories);
+          setLoading(false);
+        }
+        // Mark initial fetch as done even if it failed
+        initialFetchDone.current = true;
       } finally {
-        setLoading(false);
+        // Clear the fetchInProgress flag
+        fetchInProgress.current = false;
       }
     };
 
-    loadProducts();
-  }, [demoProducts, forceRefreshData]);
+    // Add a slight delay before initial fetch to prevent race conditions
+    const timer = setTimeout(() => {
+      fetchInitialData();
+    }, 500);
 
-  // Force refresh on component mount and every 30 seconds
-  useEffect(() => {
-    console.log('ProductList component mounted, fetching products and categories from API');
-
-    // Initial fetch of products
-    fetchProductsFromAPI().then(apiProducts => {
-      if (apiProducts && apiProducts.length > 0) {
-        console.log(`Setting ${apiProducts.length} products from API on mount`);
-        setProducts(apiProducts);
-      } else {
-        console.log('Initial API fetch failed, forcing refresh from database');
-        forceRefreshData();
-      }
-    });
-
-    // Initial fetch of categories
-    fetchCategoriesFromAPI().then(categories => {
-      if (categories && categories.length > 0) {
-        console.log(`Setting ${categories.length} categories from API on mount`);
-        setApiCategories(categories);
-      }
-    });
-
-    // Set up interval to refresh products and categories every 30 seconds
-    const intervalId = setInterval(() => {
-      console.log('Auto-refreshing products and categories from API...');
-
-      // Refresh products
-      fetchProductsFromAPI().then(apiProducts => {
-        if (apiProducts && apiProducts.length > 0) {
-          console.log(`Setting ${apiProducts.length} products from API (auto-refresh)`);
-          setProducts(apiProducts);
-        }
-      });
-
-      // Refresh categories
-      fetchCategoriesFromAPI().then(categories => {
-        if (categories && categories.length > 0) {
-          console.log(`Setting ${categories.length} categories from API (auto-refresh)`);
-          setApiCategories(categories);
-        }
-      });
-    }, 30000);
-
-    // Clean up interval on component unmount
-    return () => clearInterval(intervalId);
-  }, []);
+    // Clean up function
+    return () => {
+      clearTimeout(timer);
+      isMounted = false;
+    };
+  }, [demoProducts, demoCategories]);
 
   // Filter products by category if needed
   useEffect(() => {
@@ -201,19 +265,33 @@ const ProductList = () => {
 
     try {
       setLoading(true);
-      // Use the demo data function to delete the product
-      await deleteProduct(productToDelete.id);
 
-      // Force refresh data from the database to ensure we have the latest state
-      await forceRefreshData();
+      // Delete the product using the API
+      console.log(`Deleting product ${productToDelete.id} via API...`);
+      const response = await axios.delete(`${getApiUrl(`admin/products/${productToDelete.id}`)}`);
+      console.log('Delete product response:', response.data);
 
-      // No need to update the products state manually as it will be updated via the useEffect
-      setIsDeleteModalOpen(false);
-      setProductToDelete(null);
+      if (response.data && response.data.success) {
+        console.log('Product deleted successfully');
+        // Refresh the products list
+        const apiProducts = await fetchProductsFromAPI();
+        if (apiProducts && apiProducts.length > 0) {
+          console.log(`Setting ${apiProducts.length} products from API after delete`);
+          setProducts(apiProducts);
+        } else {
+          // Force refresh data from the database if API fetch fails
+          await forceRefreshData();
+        }
+
+        setIsDeleteModalOpen(false);
+        setProductToDelete(null);
+      } else {
+        throw new Error(response.data?.message || 'Failed to delete product');
+      }
       setLoading(false);
     } catch (err) {
       console.error('Error deleting product:', err);
-      setError('Failed to delete product');
+      setError('Failed to delete product: ' + (err.response?.data?.message || err.message || 'Unknown error'));
       setLoading(false);
     }
   };

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDemoData } from '../../context/DemoDataContext';
 import { productService } from '../../services/api';
+import { getApiUrl } from '../../utils/apiConfig';
 import axios from 'axios';
 
 const ProductForm = () => {
@@ -122,7 +123,7 @@ const ProductForm = () => {
   const fetchCategoriesFromAPI = async () => {
     try {
       console.log('Fetching categories directly from API...');
-      const response = await axios.get('http://localhost:5002/api/admin/categories');
+      const response = await axios.get(getApiUrl('admin/categories'));
       console.log('Categories API response:', response.data);
 
       if (Array.isArray(response.data)) {
